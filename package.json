@@ -1,0 +1,32 @@
+{
+  "name": "effect-mdx",
+  "version": "0.1.0",
+  "description": "A library for working with MDX using Effect",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --external effect",
+    "dev": "bun run src/index.ts",
+    "test": "bun test"
+  },
+  "keywords": [
+    "effect",
+    "mdx",
+    "functional-programming"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "effect": "^3.17.6",
+    "typescript": "^5"
+  },
+  "dependencies": {}
+}
