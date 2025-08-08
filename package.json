@@ -28,5 +28,15 @@
     "effect": "^3.17.6",
     "typescript": "^5"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@effect/platform": "^0.90.0",
+    "@effect/platform-node": "^0.94.1",
+    "gray-matter": "^4.0.3",
+    "rehype-stringify": "^10.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.5",
+    "yaml": "^2.8.1"
+  }
 }
