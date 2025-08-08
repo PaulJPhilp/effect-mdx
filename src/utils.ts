@@ -1,6 +1,6 @@
 import matter from "gray-matter";
-import type { JSONValue, Metadata, Frontmatter } from "./types.ts";
-import { InvalidMdxFormatError } from "./errors.ts";
+import type { JSONValue, Metadata, Frontmatter } from "./types";
+import { InvalidMdxFormatError } from "./errors";
 
 /**
  * Convert arbitrary unknown into a JSON-compatible value.

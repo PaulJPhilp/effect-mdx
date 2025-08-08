@@ -10,11 +10,11 @@ import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
 import rehypeStringify from "rehype-stringify";
-import type { Frontmatter, ParameterDefinition, Metadata, UnknownRecord, MdxCompileOptions, CompiledMdxResult } from "./types.ts";
-import type { MdxPipelineConfig } from "./config.ts";
-import { sanitizeToMetadata, updateMdxContent, validateFrontmatterFence } from "./utils.ts";
-import { MdxConfigService } from "./config.ts";
-import { InvalidMdxFormatError, InvalidFrontmatterError } from "./errors.ts";
+import type { Frontmatter, ParameterDefinition, Metadata, UnknownRecord, MdxCompileOptions, CompiledMdxResult } from "./types";
+import type { MdxPipelineConfig } from "./config";
+import { sanitizeToMetadata, updateMdxContent, validateFrontmatterFence } from "./utils";
+import { MdxConfigService } from "./config";
+import { InvalidMdxFormatError, InvalidFrontmatterError } from "./errors";
 
 /**
  * MdxService

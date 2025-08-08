@@ -2,35 +2,60 @@
   "name": "effect-mdx",
   "version": "0.1.0",
   "description": "A library for working with MDX using Effect",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
-  "files": [
-    "dist"
-  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --external effect",
+    "build": "tsc -p tsconfig.build.json",
     "dev": "bun run src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun run build"
   },
   "keywords": [
     "effect",
     "mdx",
-    "functional-programming"
+    "functional-programming",
+    "rehype",
+    "remark",
+    "unified",
+    "mdx-js"
   ],
-  "author": "",
+  "author": "Paul Philp",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PaulJPhilp/effect-mdx.git"
+  },
+  "homepage": "https://github.com/PaulJPhilp/effect-mdx#readme",
+  "bugs": {
+    "url": "https://github.com/PaulJPhilp/effect-mdx/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typescript": "^5"
   },
   "peerDependencies": {
     "effect": "^3.17.6",
-    "typescript": "^5"
+    "@effect/platform": "^0.90.0",
+    "@effect/platform-node": "^0.94.1"
+  },
+  "peerDependenciesMeta": {
+    "@effect/platform-node": {
+      "optional": true
+    }
   },
   "dependencies": {
-    "@effect/platform": "^0.90.0",
-    "@effect/platform-node": "^0.94.1",
     "@mdx-js/mdx": "^3.1.0",
     "gray-matter": "^4.0.3",
     "rehype-stringify": "^10.0.1",
