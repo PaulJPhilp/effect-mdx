@@ -31,6 +31,7 @@
   "dependencies": {
     "@effect/platform": "^0.90.0",
     "@effect/platform-node": "^0.94.1",
+    "@mdx-js/mdx": "^3.1.0",
     "gray-matter": "^4.0.3",
     "rehype-stringify": "^10.0.1",
     "remark-gfm": "^4.0.1",

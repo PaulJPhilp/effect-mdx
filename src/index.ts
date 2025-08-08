@@ -11,5 +11,8 @@ export * from "./service.ts";
 // Export the MdxService interface
 export * from "./api.ts";
 
+// Export config service for pipeline extensibility
+export * from "./config.ts";
+
 // Export Effect for convenience
 export { Effect } from "effect";

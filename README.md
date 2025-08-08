@@ -2,7 +2,15 @@
 
 A robust, type-safe, and purely functional library for processing MDX (Markdown with JSX) content, built with the Effect-TS ecosystem. `effect-mdx` provides a high-level API for parsing, compiling, and manipulating MDX files, ensuring that all operations are handled within Effect's powerful and composable asynchronous runtime.
 
-This library is designed for developers who want to leverage the full power of Effect for content-driven applications, such as static site generators, documentation platforms, or any system that consumes MDX.
+This library is designed for both backend and frontend use:
+
+- Backend (Node): read MDX from the filesystem, parse frontmatter, and compile
+  to HTML or JS/ESM. Provide `NodeFileSystem.layer` when using file I/O.
+- Frontend (browser/edge runtimes): parse/compile MDX strings (no FS needed).
+  Use `parseMdxFile`, `compileMdxToHtml`, or `compileMdx` directly on strings.
+
+Use it for static sites, docs platforms, content pipelines, or interactive UIs
+that render MDX on the client.
 
 ## Features
 
@@ -76,26 +84,159 @@ Effect.runPromiseExit(runnable).then((exit) => {
 
 ## API Reference
 
+## Frontend Quick Start (no filesystem)
+
+Use the service directly on strings in the browser/edge. You do not need
+`NodeFileSystem.layer` when you are not reading from disk.
+
+```ts
+import { Effect, Exit } from "effect";
+import { MdxService } from "effect-mdx";
+
+const mdx = `---\nlayout: demo\n---\n\n# Hello from the browser`;
+
+const program = Effect.gen(function* () {
+  const svc = yield* MdxService;
+  // Validate and split frontmatter/body first
+  const parsed = yield* svc.parseMdxFile(mdx);
+  // Compile body to HTML on the client
+  const html = yield* svc.compileMdxToHtml(parsed.body);
+  return { frontmatter: parsed.attributes, html };
+}).pipe(Effect.provide(MdxService.Live));
+
+Effect.runPromiseExit(program).then((exit) => {
+  if (Exit.isSuccess(exit)) {
+    console.log("frontmatter", exit.value.frontmatter);
+    console.log("html", exit.value.html);
+  } else {
+    console.error(exit.cause);
+  }
+});
+```
+
 ### MdxService
 
 The `MdxService` provides the following methods:
 
-| Method                        | Description                                                                                             | Returns                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `readMdxAndFrontmatter(path)` | Reads an MDX file from `path`, parses its frontmatter, and returns both.                                | `Effect<MdxFile, FileNotFoundError>`      |
-| `updateMdxContent(file)`      | Takes an `MdxFile` object and returns the full string content with updated frontmatter.                 | `Effect<string>`                        |
-| `parseMdxFile(content)`       | Parses a raw string of MDX content into frontmatter and body.                                           | `Effect<MdxFile, InvalidMdxFormatError>`  |
-| `compileMdxToHtml(content)`   | Compiles the body of MDX content to an HTML string. Validates frontmatter first.                        | `Effect<string, InvalidMdxFormatError>`  |
-| `compileForLlmUi(content)`    | Prepares MDX content for LLM UI consumption by returning raw markdown and frontmatter.                  | `Effect<LlmUiOutput, InvalidMdxFormatError>` |
-| `validateMdxConfig(attrs)`    | Validates a frontmatter object against a known `MdxConfig` schema.                                      | `Effect<MdxConfig>`                     |
-| `extractParameters(attrs)`    | Extracts a typed map of `Parameter` objects from a frontmatter object.                                  | `Effect<Record<string, Parameter>>`     |
+| Method                        | Description                                                         | Returns                                                    |
+| ----------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `readMdxAndFrontmatter(path)` | Read file, parse YAML frontmatter and body.                         | `Effect<ReadMdxAndFrontmatter, PlatformError | InvalidMdxFormatError>` |
+| `updateMdxContent(content, fm)`| Reconstruct content with updated frontmatter.                       | `string`                                                   |
+| `parseMdxFile(content)`       | Parse MDX string into attributes and body.                          | `Effect<ParsedMdxAttributes, InvalidMdxFormatError>`       |
+| `compileMdxToHtml(content)`   | Compile body to HTML using remark/rehype.                           | `Effect<string, InvalidMdxFormatError>`                    |
+| `compileForLlmUi(content)`    | Prepare data for LLM UI (raw markdown + sanitized frontmatter).     | `Effect<CompileForLlmUiResult, InvalidMdxFormatError>`     |
+| `compileMdx(content, options)`| Compile true MDX with `@mdx-js/mdx` to JS/ESM.                      | `Effect<CompiledMdxResult, InvalidMdxFormatError>`         |
+| `validateMdxConfig(attrs)`    | Extract common config fields from attributes.                        | `Effect<MdxConfigValidation, never>`                       |
+| `extractParameters(metadata)` | Extract typed parameter definitions from metadata.                   | `Parameters`                                               |
 
 ### Key Types
 
--   `MdxFile`: `{ attributes: Record<string, unknown>; body: string }`
--   `MdxConfig`: A structured configuration object derived from frontmatter.
--   `Parameter`: A typed representation of a parameter defined in frontmatter.
--   `LlmUiOutput`: `{ rawMarkdown: string; frontmatter: Record<string, unknown>; metadata: { llmUiMode: true } }`
+- `ReadMdxAndFrontmatter`
+- `ParsedMdxAttributes`
+- `Frontmatter`
+- `Metadata`
+- `Parameters`
+- `ParameterDefinition`
+- `CompileForLlmUiResult`
+- `CompiledMdxResult`
+- `MdxCompileOptions`
+- `MdxConfigValidation`
+
+## True MDX Compilation Example
+
+## LLM UI mode (what it’s for)
+
+`compileForLlmUi()` prepares MDX for use in an "LLM UI"—a simple, typed data
+shape that frontends can consume to build prompt editors, previews, or
+playground-style experiences. It returns:
+
+- `rawMarkdown`: the MDX body, ready for editors or previews
+- `frontmatter`: sanitized, JSON-only metadata derived from YAML frontmatter
+- `metadata: { llmUiMode: true }`: a marker indicating UI-focused usage
+
+This shape avoids bundler/JSX concerns and keeps the payload minimal and safe
+for client-side rendering.
+
+```ts
+import { Effect, Exit } from "effect";
+import { MdxService } from "effect-mdx";
+
+const mdx = `---\nmodel: gpt-4o\nparameters: { temperature: 0.2 }\n---\n\n# Prompt`;
+
+const program = Effect.gen(function* () {
+  const svc = yield* MdxService;
+  const out = yield* svc.compileForLlmUi(mdx);
+  // { rawMarkdown, frontmatter, metadata: { llmUiMode: true } }
+  return out;
+}).pipe(Effect.provide(MdxService.Live));
+
+Effect.runPromiseExit(program).then((exit) => {
+  if (Exit.isSuccess(exit)) {
+    console.log("raw", exit.value.rawMarkdown);
+    console.log("fm", exit.value.frontmatter);
+  } else {
+    console.error(exit.cause);
+  }
+});
+```
+
+Minimal UI render (insert into DOM):
+
+```html
+<div>
+  <h3>Frontmatter</h3>
+  <pre id="fm"></pre>
+  <h3>Markdown</h3>
+  <textarea id="editor" rows="6" cols="60"></textarea>
+</div>
+<script type="module">
+  import { Effect } from "effect";
+  import { MdxService } from "effect-mdx";
+
+  const mdx = `---\ntitle: Demo\n---\n\n# Hello`;
+
+  const prog = Effect.gen(function* () {
+    const svc = yield* MdxService;
+    return yield* svc.compileForLlmUi(mdx);
+  }).pipe(Effect.provide(MdxService.Live));
+
+  Effect.runPromise(prog).then(({ rawMarkdown, frontmatter }) => {
+    document.querySelector("#editor").value = rawMarkdown;
+    document.querySelector("#fm").textContent = JSON.stringify(
+      frontmatter,
+      null,
+      2
+    );
+  });
+</script>
+```
+
+```ts
+import { Effect, Exit } from "effect";
+import { NodeFileSystem } from "@effect/platform-node";
+import { MdxService } from "effect-mdx";
+
+const content = `---\ntitle: JSX demo\n---\n\nexport const Answer = 42\n\n# Hello <Badge text=\"MDX\" />\n`;
+
+const program = Effect.gen(function* () {
+  const svc = yield* MdxService;
+  const out = yield* svc.compileMdx(content, {
+    format: "mdx",
+    outputFormat: "program",
+  });
+  return out;
+}).pipe(Effect.provide(MdxService.Live), Effect.provide(NodeFileSystem.layer));
+
+Effect.runPromiseExit(program).then((exit) => {
+  if (Exit.isSuccess(exit)) {
+    console.log("code length:", exit.value.code.length);
+    console.log("frontmatter:", exit.value.frontmatter);
+    console.log("messages:", exit.value.messages);
+  } else {
+    console.error(exit.cause);
+  }
+});
+```
 
 ### Custom Errors
 
@@ -124,6 +265,59 @@ const executable = myEffect.pipe(
 
 This modular approach allows you to easily swap the live implementation with a test version in your unit tests, as shown in this project's own test suite.
 
+## Pipeline configuration (MdxConfigService)
+
+You can configure the Markdown/MDX pipeline via the
+`MdxConfigService` layer. This controls `remark`/`rehype` plugins used
+by `compileMdxToHtml()` and serves as defaults for `compileMdx()`.
+
+- **Defaults**: no extra plugins.
+- **Override globally**: provide your own layer for `MdxConfigService`.
+- **Per call**: pass `remarkPlugins`/`rehypePlugins` to `compileMdx()`.
+
+Example: enable slugs, autolinked headings, and sanitization.
+
+```ts
+import { Effect, Layer } from "effect";
+import { NodeFileSystem } from "@effect/platform-node";
+import {
+  MdxService,
+  MdxConfigService,
+  type MdxPipelineConfig,
+} from "effect-mdx";
+import remarkSlug from "remark-slug";
+import remarkAutolinkHeadings from "remark-autolink-headings";
+import rehypeSanitize from "rehype-sanitize";
+
+const pipeline: MdxPipelineConfig = {
+  remarkPlugins: [remarkSlug, [remarkAutolinkHeadings, { behavior: "wrap" }]],
+  rehypePlugins: [[rehypeSanitize, {}]],
+  sanitize: {},
+  slug: true,
+  autolinkHeadings: true,
+};
+
+const PipelineLayer = Layer.succeed(MdxConfigService, {
+  getConfig: () => pipeline,
+});
+
+const program = Effect.gen(function* () {
+  const svc = yield* MdxService;
+  const html = yield* svc.compileMdxToHtml("# Hello");
+  return html;
+}).pipe(Effect.provide(PipelineLayer), Effect.provide(NodeFileSystem.layer));
+
+// Per-call override for true MDX
+const mdxProgram = Effect.gen(function* () {
+  const svc = yield* MdxService;
+  const out = yield* svc.compileMdx("# Hi <X/>", {
+    remarkPlugins: [],
+    rehypePlugins: [],
+  });
+  return out.code;
+});
+```
+
 ## Contributing
 
 Contributions are welcome! This project follows a standard fork-and-pull-request workflow. Please follow these steps to contribute:
@@ -147,9 +341,6 @@ Contributions are welcome! This project follows a standard fork-and-pull-request
     bun test
     ```
 7.  **Push and Create a Pull Request**: Push your branch to your fork and open a pull request against the main `effect-mdx` repository.
-  console.log(result);
-});
-```
 
 ## Development
 
