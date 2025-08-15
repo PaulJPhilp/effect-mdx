@@ -13,6 +13,3 @@ export * from "./api";
 
 // Export config service for pipeline extensibility
 export * from "./config";
-
-// Export Effect for convenience
-export { Effect } from "effect";
