@@ -27,15 +27,10 @@ import {
   validateFrontmatterFence,
 } from "./utils";
 
-/**
- * MdxService
- *
- * Effect-based service exposing MDX parsing and compilation utilities while
- * keeping strict typing and JSON-only metadata handling.
- */
-export class MdxService extends Effect.Service<MdxService>()("MdxService", {
+export class MdxService extends Effect.Service()("MdxService", {
   scoped: Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+    const mdxConfig = yield* MdxConfigService;
 
     const defaultCfg: MdxPipelineConfig = {
       remarkPlugins: [],
@@ -44,23 +39,8 @@ export class MdxService extends Effect.Service<MdxService>()("MdxService", {
       slug: false,
       autolinkHeadings: false,
     };
-    const cfg: MdxPipelineConfig = yield* Effect.catchAll(
-      Effect.gen(function* () {
-        type MdxConfigSvc = { getConfig: () => MdxPipelineConfig };
-        type EffectType<A> = ReturnType<typeof Effect.succeed<A>>;
-        const cfgSvc = yield* (
-          MdxConfigService as unknown as {
-            scoped: EffectType<MdxConfigSvc>;
-          }
-        ).scoped;
-        return cfgSvc.getConfig() ?? defaultCfg;
-      }),
-      () => Effect.succeed(defaultCfg)
-    );
+    const cfg: MdxPipelineConfig = mdxConfig.getConfig() ?? defaultCfg;
 
-    /**
-     * Read an MDX file from disk and parse YAML frontmatter.
-     */
     const readMdxAndFrontmatter = (filePath: string) =>
       Effect.gen(function* () {
         const fileContent = yield* fs.readFileString(filePath);
@@ -73,10 +53,6 @@ export class MdxService extends Effect.Service<MdxService>()("MdxService", {
         };
       });
 
-    /**
-     * Parse an MDX string into attributes (frontmatter) and body.
-     * Applies a pre-validation heuristic for frontmatter fence issues.
-     */
     const parseMdxFile = (content: string) =>
       Effect.try({
         try: () => {
@@ -97,7 +73,6 @@ export class MdxService extends Effect.Service<MdxService>()("MdxService", {
           }),
       });
 
-    /** Compile MDX content to HTML via remark/rehype. */
     const compileMdxToHtml = (mdxContent: string) =>
       Effect.gen(function* () {
         const parsed = yield* parseMdxFile(mdxContent);
@@ -147,10 +122,6 @@ export class MdxService extends Effect.Service<MdxService>()("MdxService", {
         return html;
       });
 
-    /**
-     * Compile MDX content to JS/ESM using @mdx-js/mdx and return code,
-     * source map (if available), messages, and sanitized frontmatter.
-     */
     const compileMdx = (mdxContent: string, options?: MdxCompileOptions) =>
       Effect.gen(function* () {
         const parsed = yield* parseMdxFile(mdxContent);
@@ -192,10 +163,6 @@ export class MdxService extends Effect.Service<MdxService>()("MdxService", {
         return result;
       });
 
-    /**
-     * Prepare content for LLM UI consumption, returning raw markdown,
-     * sanitized frontmatter, and a mode marker.
-     */
     const compileForLlmUi = (mdxContent: string) =>
       Effect.gen(function* () {
         const parsed = yield* parseMdxFile(mdxContent);
@@ -206,7 +173,6 @@ export class MdxService extends Effect.Service<MdxService>()("MdxService", {
         } as const;
       });
 
-    /** Extract common config fields from frontmatter attributes. */
     const validateMdxConfig = (attributes: UnknownRecord) => {
       const provider =
         typeof attributes.provider === "string"
@@ -227,8 +193,6 @@ export class MdxService extends Effect.Service<MdxService>()("MdxService", {
       });
     };
 
-    // Extract parameters from frontmatter
-    /** Extract typed parameter definitions from frontmatter metadata. */
     const extractParameters = (metadata: Metadata) => {
       const parameters: Record<string, ParameterDefinition> = {};
       const paramsNode = (metadata as { readonly parameters?: unknown })
@@ -282,5 +246,5 @@ export class MdxService extends Effect.Service<MdxService>()("MdxService", {
       extractParameters,
     };
   }),
-  dependencies: [],
+  dependencies: [FileSystem.FileSystem, MdxConfigService.Default],
 }) {}

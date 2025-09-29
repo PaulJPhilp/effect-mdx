@@ -8,8 +8,5 @@ export * from "./types";
 // Export the MdxService
 export * from "./service";
 
-// Export the MdxService interface
-export * from "./api";
-
 // Export config service for pipeline extensibility
 export * from "./config";

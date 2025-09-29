@@ -24,30 +24,28 @@ export interface MdxPipelineConfig {
 /**
  * Effect.Service that provides access to the MDX pipeline configuration.
  */
-export class MdxConfigService extends Effect.Service<MdxConfigService>()(
-  "MdxConfigService",
-  {
-    scoped: Effect.succeed({
-      /** Get the current pipeline configuration. */
-      getConfig: (): MdxPipelineConfig => ({
-        remarkPlugins: [],
-        rehypePlugins: [],
-        sanitize: false,
-        slug: false,
-        autolinkHeadings: false,
-      })
+export class MdxConfigService extends Effect.Service<MdxConfigService>()("MdxConfigService", {
+  // Because it's a pure value, use `succeed`
+  succeed: {
+    /** Get the current pipeline configuration. */
+    getConfig: (): MdxPipelineConfig => ({
+      remarkPlugins: [],
+      rehypePlugins: [],
+      sanitize: false,
+      slug: false,
+      autolinkHeadings: false,
     }),
-    dependencies: [],
-  }
-) {}
+  },
+  dependencies: [],
+}) {}
 
 /**
  * Build a configuration Layer from a concrete config object.
  */
 export const makeMdxConfigLayer = (cfg: MdxPipelineConfig) =>
   Layer.succeed(
-    MdxConfigService as any,
-    ({ getConfig: () => cfg } as unknown as InstanceType<typeof MdxConfigService>)
+    MdxConfigService,
+    MdxConfigService.of({ getConfig: () => cfg })
   );
 
 /**
@@ -102,10 +100,4 @@ export const docsPresetLayer = (opts: DocsPresetOptions = {}) => {
 /**
  * Default empty configuration layer.
  */
-export const defaultMdxConfigLayer = makeMdxConfigLayer({
-  remarkPlugins: [],
-  rehypePlugins: [],
-  sanitize: false,
-  slug: false,
-  autolinkHeadings: false,
-});
+export const defaultMdxConfigLayer = MdxConfigService.Default;
