@@ -1,10 +1,10 @@
 import { FileSystem } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { describe, it, expect } from "bun:test";
-import { MdxService } from "../src/service";
+import { MdxService, MdxServiceLive } from "../src/service";
 import { MdxConfigService } from "../src/config";
 
-const testMdxContent = `---
+const testMdxContent = `--- 
 title: Test Title
 author: John Doe
 ---
@@ -25,7 +25,7 @@ describe("MdxService", () => {
 
   const mockConfigLayer = Layer.succeed(
     MdxConfigService,
-    MdxConfigService.of({
+    {
       getConfig: () => ({
         remarkPlugins: [],
         rehypePlugins: [],
@@ -33,12 +33,12 @@ describe("MdxService", () => {
         slug: false,
         autolinkHeadings: false,
       }),
-    })
+    }
   );
 
-  const testLayer = Layer.provide(
-    MdxService.DefaultWithoutDependencies,
-    Layer.merge(mockFsLayer, mockConfigLayer)
+  const testLayer = MdxServiceLive.pipe(
+    Layer.provide(mockFsLayer),
+    Layer.provide(mockConfigLayer)
   );
 
   it("should read mdx and frontmatter", async () => {

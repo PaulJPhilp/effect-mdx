@@ -1,6 +1,6 @@
 import { FileSystem } from "@effect/platform";
 import { compile as mdxCompile } from "@mdx-js/mdx";
-import { Effect } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import matter from "gray-matter";
 import rehypeStringify from "rehype-stringify";
 import remarkGfm from "remark-gfm";
@@ -20,15 +20,54 @@ import type {
   Metadata,
   ParameterDefinition,
   UnknownRecord,
+  ReadMdxAndFrontmatter,
+  ParsedMdxAttributes,
+  CompileForLlmUiResult,
+  MdxConfigValidation,
+  Parameters,
 } from "./types";
+import type { PlatformError } from "@effect/platform/Error";
 import {
   sanitizeToMetadata,
   updateMdxContent,
   validateFrontmatterFence,
 } from "./utils";
+import { decodeFrontmatter, decodeMetadata } from "./schemas";
+import { isString, isObject, hasStringKey, hasObjectKey } from "./guards";
 
-export class MdxService extends Effect.Service()("MdxService", {
-  scoped: Effect.gen(function* () {
+export interface MdxServiceSchema {
+  readonly readMdxAndFrontmatter: (
+    filePath: string
+  ) => Effect.Effect<
+    ReadMdxAndFrontmatter,
+    PlatformError | InvalidMdxFormatError,
+    never
+  >;
+  readonly updateMdxContent: (
+    originalFullMdxContent: string,
+    updatedFrontmatter: Frontmatter
+  ) => string;
+  readonly parseMdxFile: (
+    content: string
+  ) => Effect.Effect<ParsedMdxAttributes, InvalidMdxFormatError, never>;
+  readonly compileMdxToHtml: (
+    mdxContent: string
+  ) => Effect.Effect<string, InvalidMdxFormatError, never>;
+  readonly compileForLlmUi: (
+    mdxContent: string
+  ) => Effect.Effect<CompileForLlmUiResult, InvalidMdxFormatError, never>;
+  readonly compileMdx: (
+    mdxContent: string,
+    options?: MdxCompileOptions
+  ) => Effect.Effect<CompiledMdxResult, InvalidMdxFormatError, never>;
+  readonly validateMdxConfig: (
+    attributes: UnknownRecord
+  ) => Effect.Effect<MdxConfigValidation, never, never>;
+  readonly extractParameters: (metadata: Metadata) => Parameters;
+}
+
+export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService", {
+  effect: Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const mdxConfig = yield* MdxConfigService;
 
@@ -46,31 +85,53 @@ export class MdxService extends Effect.Service()("MdxService", {
         const fileContent = yield* fs.readFileString(filePath);
         const { data: frontmatter, content: mdxBody } = matter(fileContent);
 
+        const validatedFrontmatter = yield* decodeFrontmatter(frontmatter).pipe(
+          Effect.mapError(
+            (error) =>
+              new InvalidMdxFormatError({
+                reason: `Invalid frontmatter in ${filePath}: ${error}`,
+                cause: error,
+              })
+          )
+        );
+
         return {
           content: fileContent,
-          frontmatter: frontmatter as Frontmatter,
+          frontmatter: validatedFrontmatter,
           mdxBody,
         };
       });
 
     const parseMdxFile = (content: string) =>
-      Effect.try({
-        try: () => {
-          validateFrontmatterFence(content);
+      Effect.gen(function* () {
+        yield* Effect.try({
+          try: () => validateFrontmatterFence(content),
+          catch: (error) =>
+            new InvalidMdxFormatError({
+              reason: `Failed to validate frontmatter fence: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              cause: error,
+            }),
+        });
 
-          const { data: frontmatter, content: body } = matter(content);
-          return {
-            attributes: frontmatter as Record<string, unknown>,
-            body,
-          };
-        },
-        catch: (error) =>
-          new InvalidMdxFormatError({
-            reason: `Failed to parse MDX content: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            cause: error,
-          }),
+        const { data: frontmatter, content: body } = matter(content);
+
+        // Validate frontmatter structure
+        yield* decodeFrontmatter(frontmatter).pipe(
+          Effect.mapError(
+            (error) =>
+              new InvalidMdxFormatError({
+                reason: `Invalid frontmatter structure: ${error}`,
+                cause: error,
+              })
+          )
+        );
+
+        return {
+          attributes: frontmatter as Record<string, unknown>,
+          body,
+        };
       });
 
     const compileMdxToHtml = (mdxContent: string) =>
@@ -79,12 +140,12 @@ export class MdxService extends Effect.Service()("MdxService", {
         const html: string = yield* Effect.tryPromise({
           try: async () => {
             const base = unified().use(remarkParse).use(remarkGfm);
-            for (const plug of cfg.remarkPlugins as unknown as ReadonlyArray<Pluggable>) {
+            for (const plug of cfg.remarkPlugins) {
               if (Array.isArray(plug)) {
-                base.use(plug as unknown as PluggableList);
+                base.use(plug as PluggableList);
               } else {
                 base.use(
-                  plug as unknown as Plugin<
+                  plug as Plugin<
                     [],
                     string | UnistNode | undefined,
                     unknown
@@ -93,12 +154,12 @@ export class MdxService extends Effect.Service()("MdxService", {
               }
             }
             base.use(remarkRehype);
-            for (const plug of cfg.rehypePlugins as unknown as ReadonlyArray<Pluggable>) {
+            for (const plug of cfg.rehypePlugins) {
               if (Array.isArray(plug)) {
-                base.use(plug as unknown as PluggableList);
+                base.use(plug as PluggableList);
               } else {
                 base.use(
-                  plug as unknown as Plugin<
+                  plug as Plugin<
                     [],
                     string | UnistNode | undefined,
                     unknown
@@ -129,11 +190,11 @@ export class MdxService extends Effect.Service()("MdxService", {
           try: async () =>
             await mdxCompile(parsed.body, {
               remarkPlugins: options?.remarkPlugins
-                ? Array.from(options.remarkPlugins as Pluggable[])
-                : Array.from(cfg.remarkPlugins as unknown as Pluggable[]),
+                ? Array.from(options.remarkPlugins)
+                : Array.from(cfg.remarkPlugins),
               rehypePlugins: options?.rehypePlugins
-                ? Array.from(options.rehypePlugins as Pluggable[])
-                : Array.from(cfg.rehypePlugins as unknown as Pluggable[]),
+                ? Array.from(options.rehypePlugins)
+                : Array.from(cfg.rehypePlugins),
               development: options?.development,
               format: options?.format ?? "mdx",
               outputFormat: options?.outputFormat ?? "program",
@@ -174,17 +235,15 @@ export class MdxService extends Effect.Service()("MdxService", {
       });
 
     const validateMdxConfig = (attributes: UnknownRecord) => {
-      const provider =
-        typeof attributes.provider === "string"
-          ? attributes.provider
-          : undefined;
-      const model =
-        typeof attributes.model === "string" ? attributes.model : undefined;
-      const rawParams = (attributes as Record<string, unknown>).parameters;
-      const parameters =
-        typeof rawParams === "object" && rawParams !== null
-          ? sanitizeToMetadata(rawParams as Record<string, unknown>)
-          : undefined;
+      const provider = hasStringKey(attributes, "provider")
+        ? attributes.provider
+        : undefined;
+      const model = hasStringKey(attributes, "model")
+        ? attributes.model
+        : undefined;
+      const parameters = hasObjectKey(attributes, "parameters")
+        ? sanitizeToMetadata(attributes.parameters)
+        : undefined;
 
       return Effect.succeed({
         provider,
@@ -195,39 +254,34 @@ export class MdxService extends Effect.Service()("MdxService", {
 
     const extractParameters = (metadata: Metadata) => {
       const parameters: Record<string, ParameterDefinition> = {};
-      const paramsNode = (metadata as { readonly parameters?: unknown })
-        .parameters;
-      const paramsObj =
-        paramsNode && typeof paramsNode === "object"
-          ? (paramsNode as Record<string, unknown>)
-          : {};
+
+      if (!hasObjectKey(metadata, "parameters")) {
+        return parameters;
+      }
+
+      const paramsObj = metadata.parameters;
 
       for (const [key, value] of Object.entries(paramsObj)) {
-        if (typeof value === "object" && value !== null && "type" in value) {
-          const paramValue = value as Record<string, unknown>;
-          const type = paramValue.type;
+        if (isObject(value) && hasStringKey(value, "type")) {
+          const type = value.type;
 
           if (
-            typeof type === "string" &&
             ["string", "number", "boolean", "array", "object"].includes(type)
           ) {
-            parameters[key] = {
+            const paramDef: ParameterDefinition = {
               type: type as
                 | "string"
                 | "number"
                 | "boolean"
                 | "array"
                 | "object",
-              description:
-                typeof paramValue.description === "string"
-                  ? paramValue.description
-                  : undefined,
-              required:
-                typeof paramValue.required === "boolean"
-                  ? paramValue.required
-                  : undefined,
-              default: paramValue.default,
+              description: hasStringKey(value, "description")
+                ? value.description
+                : undefined,
+              required: "required" in value && value.required === true ? true : undefined,
+              default: "default" in value ? value.default : undefined,
             };
+            parameters[key] = paramDef;
           }
         }
       }
@@ -246,5 +300,6 @@ export class MdxService extends Effect.Service()("MdxService", {
       extractParameters,
     };
   }),
-  dependencies: [FileSystem.FileSystem, MdxConfigService.Default],
 }) {}
+
+export const MdxServiceLive = MdxService.Default;
