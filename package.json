@@ -1,6 +1,6 @@
 {
   "name": "effect-mdx",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A library for working with MDX using Effect",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
