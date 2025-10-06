@@ -278,7 +278,7 @@ export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService",
               description: hasStringKey(value, "description")
                 ? value.description
                 : undefined,
-              required: "required" in value && value.required === true ? true : undefined,
+              required: "required" in value ? (value.required === true) : undefined,
               default: "default" in value ? value.default : undefined,
             };
             parameters[key] = paramDef;
