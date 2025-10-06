@@ -1,3 +1,4 @@
+import type { Pluggable } from "unified";
 
 /**
  * Canonical JSON primitive values.
@@ -90,11 +91,11 @@ export interface PromptTemplate {
 
 /**
  * Options forwarded to @mdx-js/mdx.
- * Note: plugin arrays are intentionally loose to match upstream types.
+ * Plugin arrays use the `Pluggable` type from unified for type safety.
  */
 export interface MdxCompileOptions {
-  readonly remarkPlugins?: Array<any>;
-  readonly rehypePlugins?: Array<any>;
+  readonly remarkPlugins?: ReadonlyArray<Pluggable>;
+  readonly rehypePlugins?: ReadonlyArray<Pluggable>;
   readonly development?: boolean;
   readonly format?: "mdx" | "md";
   readonly outputFormat?: "program" | "function-body";

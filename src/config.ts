@@ -1,4 +1,5 @@
 import { Effect, Layer } from "effect";
+import type { Pluggable } from "unified";
 
 /**
  * MDX processing configuration and layers.
@@ -10,12 +11,12 @@ import { Effect, Layer } from "effect";
 /**
  * Configuration for the Unified/MDX processing pipeline.
  *
- * Plugin arrays are intentionally typed as `any` due to upstream type
- * variability across remark/rehype plugins and user-supplied tuples.
+ * Plugin arrays use the `Pluggable` type from unified to ensure type safety
+ * while supporting both plugin functions and [plugin, options] tuples.
  */
 export interface MdxPipelineConfig {
-  readonly remarkPlugins: ReadonlyArray<any>;
-  readonly rehypePlugins: ReadonlyArray<any>;
+  readonly remarkPlugins: ReadonlyArray<Pluggable>;
+  readonly rehypePlugins: ReadonlyArray<Pluggable>;
   readonly sanitize?: false | Record<string, unknown>;
   readonly slug?: boolean;
   readonly autolinkHeadings?: boolean;
@@ -24,30 +25,30 @@ export interface MdxPipelineConfig {
 /**
  * Effect.Service that provides access to the MDX pipeline configuration.
  */
-export class MdxConfigService extends Effect.Service<MdxConfigService>()(
-  "MdxConfigService",
-  {
-    scoped: Effect.succeed({
-      /** Get the current pipeline configuration. */
-      getConfig: (): MdxPipelineConfig => ({
-        remarkPlugins: [],
-        rehypePlugins: [],
-        sanitize: false,
-        slug: false,
-        autolinkHeadings: false,
-      })
+export interface MdxConfigServiceSchema {
+  readonly getConfig: () => MdxPipelineConfig;
+}
+
+export class MdxConfigService extends Effect.Service<MdxConfigServiceSchema>()("MdxConfigService", {
+  succeed: {
+    /** Get the current pipeline configuration. */
+    getConfig: (): MdxPipelineConfig => ({
+      remarkPlugins: [],
+      rehypePlugins: [],
+      sanitize: false,
+      slug: false,
+      autolinkHeadings: false,
     }),
-    dependencies: [],
-  }
-) {}
+  },
+}) {}
 
 /**
  * Build a configuration Layer from a concrete config object.
  */
 export const makeMdxConfigLayer = (cfg: MdxPipelineConfig) =>
   Layer.succeed(
-    MdxConfigService as any,
-    ({ getConfig: () => cfg } as unknown as InstanceType<typeof MdxConfigService>)
+    MdxConfigService,
+    { getConfig: () => cfg }
   );
 
 /**
@@ -58,33 +59,33 @@ export interface DocsPresetOptions {
   readonly slug?: boolean;
   readonly autolink?: boolean | Record<string, unknown>;
   readonly sanitize?: false | Record<string, unknown>;
-  readonly extraRemark?: ReadonlyArray<any>;
-  readonly extraRehype?: ReadonlyArray<any>;
+  readonly extraRemark?: ReadonlyArray<Pluggable>;
+  readonly extraRehype?: ReadonlyArray<Pluggable>;
   // user-supplied plugins
-  readonly remarkSlug?: any;
-  readonly remarkAutolinkHeadings?: any; // can be [plugin, opts]
-  readonly rehypeSanitize?: any; // can be [plugin, policy]
+  readonly remarkSlug?: Pluggable;
+  readonly remarkAutolinkHeadings?: Pluggable; // can be [plugin, opts]
+  readonly rehypeSanitize?: Pluggable; // can be [plugin, policy]
 }
 
 /**
  * Create a Layer configured for documentation-style rendering.
  */
 export const docsPresetLayer = (opts: DocsPresetOptions = {}) => {
-  const remark: any[] = [];
-  const rehype: any[] = [];
+  const remark: Pluggable[] = [];
+  const rehype: Pluggable[] = [];
 
-  if (opts.slug !== false && opts.remarkSlug) remark.push(opts.remarkSlug);
+  if (opts.slug !== false && opts.remarkSlug) remark.push(opts.remarkSlug as Pluggable);
 
   if (opts.autolink !== false && opts.remarkAutolinkHeadings) {
     if (opts.autolink && typeof opts.autolink === "object")
-      remark.push([opts.remarkAutolinkHeadings, opts.autolink]);
-    else remark.push(opts.remarkAutolinkHeadings);
+      remark.push([opts.remarkAutolinkHeadings, opts.autolink] as Pluggable);
+    else remark.push(opts.remarkAutolinkHeadings as Pluggable);
   }
 
   if (opts.sanitize !== false && opts.rehypeSanitize) {
     if (opts.sanitize && typeof opts.sanitize === "object")
-      rehype.push([opts.rehypeSanitize, opts.sanitize]);
-    else rehype.push(opts.rehypeSanitize);
+      rehype.push([opts.rehypeSanitize, opts.sanitize] as Pluggable);
+    else rehype.push(opts.rehypeSanitize as Pluggable);
   }
 
   if (opts.extraRemark) remark.push(...opts.extraRemark);
@@ -102,10 +103,4 @@ export const docsPresetLayer = (opts: DocsPresetOptions = {}) => {
 /**
  * Default empty configuration layer.
  */
-export const defaultMdxConfigLayer = makeMdxConfigLayer({
-  remarkPlugins: [],
-  rehypePlugins: [],
-  sanitize: false,
-  slug: false,
-  autolinkHeadings: false,
-});
+export const defaultMdxConfigLayer = MdxConfigService.Default;

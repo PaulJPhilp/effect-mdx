@@ -2,6 +2,14 @@
 
 A robust, type-safe, and purely functional library for processing MDX (Markdown with JSX) content, built with the Effect-TS ecosystem. `effect-mdx` provides a high-level API for parsing, compiling, and manipulating MDX files, ensuring that all operations are handled within Effect's powerful and composable asynchronous runtime.
 
+<!-- Badges -->
+[![npm version](https://img.shields.io/npm/v/effect-mdx)](https://www.npmjs.com/package/effect-mdx)
+
+```bash
+# Quick install
+npm install effect-mdx
+```
+
 This library is designed for both backend and frontend use:
 
 - Backend (Node): read MDX from the filesystem, parse frontmatter, and compile
