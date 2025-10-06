@@ -300,7 +300,7 @@ title: Test
   });
 
   describe("validateFrontmatterFence", () => {
-    it("should pass valid frontmatter with balanced quotes", async () => {
+    it("should pass valid frontmatter with balanced quotes", () => {
       const valid = `---
 title: "Test Title"
 author: "John Doe"
@@ -308,11 +308,10 @@ author: "John Doe"
 
 # Content`;
 
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(valid));
-      expect(result._tag).toBe("Success");
+      expect(() => validateFrontmatterFence(valid)).not.toThrow();
     });
 
-    it("should pass frontmatter without quotes", async () => {
+    it("should pass frontmatter without quotes", () => {
       const valid = `---
 title: Test Title
 author: John Doe
@@ -320,11 +319,10 @@ author: John Doe
 
 # Content`;
 
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(valid));
-      expect(result._tag).toBe("Success");
+      expect(() => validateFrontmatterFence(valid)).not.toThrow();
     });
 
-    it("should fail on unbalanced quotes", async () => {
+    it("should fail on unbalanced quotes", () => {
       const invalid = `---
 title: "Unclosed quote
 author: John
@@ -332,15 +330,10 @@ author: John
 
 # Content`;
 
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(invalid));
-      expect(result._tag).toBe("Failure");
-      if (result._tag === "Failure") {
-        const failures = Array.from(Cause.failures(result.cause));
-        expect(failures[0]).toBeInstanceOf(InvalidMdxFormatError);
-      }
+      expect(() => validateFrontmatterFence(invalid)).toThrow(InvalidMdxFormatError);
     });
 
-    it("should fail on single unbalanced quote in multiline", async () => {
+    it("should fail on single unbalanced quote in multiline", () => {
       const invalid = `---
 title: Test
 description: "This is a
@@ -350,15 +343,10 @@ without closing quote
 
 # Content`;
 
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(invalid));
-      expect(result._tag).toBe("Failure");
-      if (result._tag === "Failure") {
-        const failures = Array.from(Cause.failures(result.cause));
-        expect(failures[0]).toBeInstanceOf(InvalidMdxFormatError);
-      }
+      expect(() => validateFrontmatterFence(invalid)).toThrow(InvalidMdxFormatError);
     });
 
-    it("should pass with multiple balanced quotes", async () => {
+    it("should pass with multiple balanced quotes", () => {
       const valid = `---
 title: "Test"
 description: "A description"
@@ -367,25 +355,22 @@ author: "John"
 
 # Content`;
 
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(valid));
-      expect(result._tag).toBe("Success");
+      expect(() => validateFrontmatterFence(valid)).not.toThrow();
     });
 
-    it("should pass content without frontmatter", async () => {
+    it("should pass content without frontmatter", () => {
       const noFrontmatter = `# Just Content
 
 No frontmatter.`;
 
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(noFrontmatter));
-      expect(result._tag).toBe("Success");
+      expect(() => validateFrontmatterFence(noFrontmatter)).not.toThrow();
     });
 
-    it("should pass empty content", async () => {
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(""));
-      expect(result._tag).toBe("Success");
+    it("should pass empty content", () => {
+      expect(() => validateFrontmatterFence("")).not.toThrow();
     });
 
-    it("should handle frontmatter with escaped quotes", async () => {
+    it("should handle frontmatter with escaped quotes", () => {
       const valid = `---
 title: "Test \\"quoted\\" title"
 ---
@@ -393,11 +378,10 @@ title: "Test \\"quoted\\" title"
 # Content`;
 
       // This might fail depending on implementation - test actual behavior
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(valid));
-      expect(result._tag).toBe("Success");
+      expect(() => validateFrontmatterFence(valid)).not.toThrow();
     });
 
-    it("should pass frontmatter with even number of quotes in different fields", async () => {
+    it("should pass frontmatter with even number of quotes in different fields", () => {
       const valid = `---
 title: "Test"
 description: Another "quoted" word
@@ -405,11 +389,10 @@ description: Another "quoted" word
 
 # Content`;
 
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(valid));
-      expect(result._tag).toBe("Success");
+      expect(() => validateFrontmatterFence(valid)).not.toThrow();
     });
 
-    it("should handle quotes in YAML strings", async () => {
+    it("should handle quotes in YAML strings", () => {
       const valid = `---
 title: Test's Title
 description: "John's \"test\""
@@ -417,8 +400,7 @@ description: "John's \"test\""
 
 # Content`;
 
-      const result = await Effect.runPromiseExit(validateFrontmatterFence(valid));
-      expect(result._tag).toBe("Success");
+      expect(() => validateFrontmatterFence(valid)).not.toThrow();
     });
   });
 });

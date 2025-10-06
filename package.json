@@ -1,6 +1,6 @@
 {
   "name": "effect-mdx",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A library for working with MDX using Effect",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -50,9 +50,9 @@
     "typescript": "^5"
   },
   "peerDependencies": {
-    "effect": "^3.17.14",
-    "@effect/platform": "^0.90.0",
-    "@effect/platform-node": "^0.94.1"
+    "effect": "^3.18.0",
+    "@effect/platform": "^0.90.10",
+    "@effect/platform-node": "^0.94.2"
   },
   "peerDependenciesMeta": {
     "@effect/platform-node": {
