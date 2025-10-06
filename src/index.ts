@@ -3,19 +3,19 @@
  */
 
 // Export all types
-export * from "./types";
+export * from "./types.js";
 
 // Export errors
-export * from "./errors";
+export * from "./errors.js";
 
 // Export schemas for validation
-export * from "./schemas";
+export * from "./schemas.js";
 
 // Export type guards
-export * from "./guards";
+export * from "./guards.js";
 
 // Export the MdxService
-export * from "./service";
+export * from "./service.js";
 
 // Export config service for pipeline extensibility
-export * from "./config";
+export * from "./config.js";

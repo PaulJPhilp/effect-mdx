@@ -10,9 +10,9 @@ import type { Pluggable, PluggableList, Plugin } from "unified";
 import { unified } from "unified";
 import type { Node as UnistNode } from "unist";
 import type { VFile } from "vfile";
-import type { MdxPipelineConfig } from "./config";
-import { MdxConfigService } from "./config";
-import { InvalidMdxFormatError } from "./errors";
+import type { MdxPipelineConfig } from "./config.js";
+import { MdxConfigService } from "./config.js";
+import { InvalidMdxFormatError } from "./errors.js";
 import type {
   CompiledMdxResult,
   Frontmatter,
@@ -25,15 +25,15 @@ import type {
   CompileForLlmUiResult,
   MdxConfigValidation,
   Parameters,
-} from "./types";
+} from "./types.js";
 import type { PlatformError } from "@effect/platform/Error";
 import {
   sanitizeToMetadata,
   updateMdxContent,
   validateFrontmatterFence,
-} from "./utils";
-import { decodeFrontmatter, decodeMetadata } from "./schemas";
-import { isString, isObject, hasStringKey, hasObjectKey } from "./guards";
+} from "./utils.js";
+import { decodeFrontmatter, decodeMetadata } from "./schemas.js";
+import { isString, isObject, hasStringKey, hasObjectKey } from "./guards.js";
 
 export interface MdxServiceSchema {
   readonly readMdxAndFrontmatter: (

@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import type { Frontmatter, Metadata } from "./types";
+import type { Frontmatter, Metadata } from "./types.js";
 
 /**
  * Schema for JSON primitive values
