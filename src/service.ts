@@ -25,6 +25,8 @@ import type {
   CompileForLlmUiResult,
   MdxConfigValidation,
   Parameters,
+  FrontmatterOptions,
+  ParsedFrontmatterResult,
 } from "./types.js";
 import type { PlatformError } from "@effect/platform/Error";
 import {
@@ -37,7 +39,8 @@ import { isString, isObject, hasStringKey, hasObjectKey } from "./guards.js";
 
 export interface MdxServiceSchema {
   readonly readMdxAndFrontmatter: (
-    filePath: string
+    filePath: string,
+    options?: FrontmatterOptions
   ) => Effect.Effect<
     ReadMdxAndFrontmatter,
     PlatformError | InvalidMdxFormatError,
@@ -48,8 +51,10 @@ export interface MdxServiceSchema {
     updatedFrontmatter: Frontmatter
   ) => string;
   readonly parseMdxFile: (
-    content: string
+    content: string,
+    options?: FrontmatterOptions
   ) => Effect.Effect<ParsedMdxAttributes, InvalidMdxFormatError, never>;
+  readonly testForFrontmatter: (content: string, options?: FrontmatterOptions) => boolean;
   readonly compileMdxToHtml: (
     mdxContent: string
   ) => Effect.Effect<string, InvalidMdxFormatError, never>;
@@ -64,6 +69,11 @@ export interface MdxServiceSchema {
     attributes: UnknownRecord
   ) => Effect.Effect<MdxConfigValidation, never, never>;
   readonly extractParameters: (metadata: Metadata) => Parameters;
+  readonly stringify: (
+    file: string | { content: string },
+    data: UnknownRecord,
+    options?: FrontmatterOptions
+  ) => string;
 }
 
 export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService", {
@@ -80,10 +90,43 @@ export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService",
     };
     const cfg: MdxPipelineConfig = mdxConfig.getConfig() ?? defaultCfg;
 
-    const readMdxAndFrontmatter = (filePath: string) =>
+    const parseFrontmatter = (content: string, options?: FrontmatterOptions): ParsedFrontmatterResult => {
+      // Map camelCase options to snake_case for gray-matter compatibility
+      const mappedOptions = options ? {
+        ...options,
+        excerpt_separator: options.excerptSeparator,
+        engines: options.engines,
+      } : undefined;
+
+      const result = matter(content, mappedOptions as any);
+      const stringifyFn = (data?: UnknownRecord, stringifyOptions?: FrontmatterOptions) => {
+        const mappedStringifyOptions = stringifyOptions ? {
+          ...stringifyOptions,
+          excerpt_separator: stringifyOptions.excerptSeparator,
+        } : undefined;
+        return matter.stringify(result.content, data || result.data, mappedStringifyOptions as any);
+      };
+
+      // Make stringify enumerable for compatibility
+      Object.defineProperty(stringifyFn, 'name', { value: 'stringify' });
+
+      return {
+        data: result.data as UnknownRecord,
+        content: result.content,
+        excerpt: result.excerpt,
+        empty: (result as any).empty,
+        isEmpty: (result as any).isEmpty,
+        language: result.language,
+        matter: result.matter,
+        orig: result.orig.toString(),
+        stringify: stringifyFn,
+      };
+    };
+
+    const readMdxAndFrontmatter = (filePath: string, options?: FrontmatterOptions) =>
       Effect.gen(function* () {
         const fileContent = yield* fs.readFileString(filePath);
-        const { data: frontmatter, content: mdxBody } = matter(fileContent);
+        const { data: frontmatter, content: mdxBody } = parseFrontmatter(fileContent, options);
 
         const validatedFrontmatter = yield* decodeFrontmatter(frontmatter).pipe(
           Effect.mapError(
@@ -102,7 +145,7 @@ export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService",
         };
       });
 
-    const parseMdxFile = (content: string) =>
+    const parseMdxFile = (content: string, options?: FrontmatterOptions) =>
       Effect.gen(function* () {
         yield* Effect.try({
           try: () => validateFrontmatterFence(content),
@@ -115,10 +158,10 @@ export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService",
             }),
         });
 
-        const { data: frontmatter, content: body } = matter(content);
+        const parsed = parseFrontmatter(content, options as any);
 
         // Validate frontmatter structure
-        yield* decodeFrontmatter(frontmatter).pipe(
+        yield* decodeFrontmatter(parsed.data).pipe(
           Effect.mapError(
             (error) =>
               new InvalidMdxFormatError({
@@ -129,8 +172,15 @@ export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService",
         );
 
         return {
-          attributes: frontmatter as Record<string, unknown>,
-          body,
+          attributes: parsed.data as Record<string, unknown>,
+          body: parsed.content,
+          excerpt: parsed.excerpt,
+          empty: parsed.empty,
+          isEmpty: parsed.isEmpty,
+          language: parsed.language,
+          matter: parsed.matter,
+          orig: parsed.orig,
+          stringify: parsed.stringify,
         };
       });
 
@@ -170,6 +220,13 @@ export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService",
             base.use(rehypeStringify);
             const finalProc = base;
             const out = await finalProc.process(parsed.body);
+            if (out.messages.length > 0) {
+              const errors = out.messages.map(msg => msg.message).join("; ");
+              throw new InvalidMdxFormatError({
+                reason: `MDX compilation failed: ${errors}`,
+                cause: out.messages,
+              });
+            }
             return out.toString();
           },
           catch: (error) =>
@@ -187,19 +244,37 @@ export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService",
       Effect.gen(function* () {
         const parsed = yield* parseMdxFile(mdxContent);
         const file = yield* Effect.tryPromise({
-          try: async () =>
-            await mdxCompile(parsed.body, {
-              remarkPlugins: options?.remarkPlugins
-                ? Array.from(options.remarkPlugins)
-                : Array.from(cfg.remarkPlugins),
-              rehypePlugins: options?.rehypePlugins
-                ? Array.from(options.rehypePlugins)
-                : Array.from(cfg.rehypePlugins),
-              development: options?.development,
-              format: options?.format ?? "mdx",
-              outputFormat: options?.outputFormat ?? "program",
-              providerImportSource: options?.providerImportSource,
-            }),
+          try: async () => {
+            let result;
+            try {
+              result = await mdxCompile(parsed.body, {
+                remarkPlugins: options?.remarkPlugins
+                  ? Array.from(options.remarkPlugins)
+                  : Array.from(cfg.remarkPlugins),
+                rehypePlugins: options?.rehypePlugins
+                  ? Array.from(options.rehypePlugins)
+                  : Array.from(cfg.rehypePlugins),
+                development: options?.development,
+                format: options?.format ?? "mdx",
+                outputFormat: options?.outputFormat ?? "program",
+                providerImportSource: options?.providerImportSource,
+              });
+            } catch (error) {
+              throw new InvalidMdxFormatError({
+                reason: `MDX compilation failed: ${error instanceof Error ? error.message : String(error)}`,
+                cause: error,
+              });
+            }
+
+            if (result.messages.length > 0) {
+              const errors = result.messages.map(msg => msg.message).join("; ");
+              throw new InvalidMdxFormatError({
+                reason: `MDX compilation failed: ${errors}`,
+                cause: result.messages,
+              });
+            }
+            return result;
+          },
           catch: (error) =>
             new InvalidMdxFormatError({
               reason: `Failed to compile MDX: ${
@@ -252,6 +327,10 @@ export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService",
       });
     };
 
+    const testForFrontmatter = (content: string, options?: FrontmatterOptions): boolean => {
+      return matter.test(content, options as any);
+    };
+
     const extractParameters = (metadata: Metadata) => {
       const parameters: Record<string, ParameterDefinition> = {};
 
@@ -289,15 +368,21 @@ export class MdxService extends Effect.Service<MdxServiceSchema>()("MdxService",
       return parameters;
     };
 
+    const stringify = (file: string | { content: string }, data: UnknownRecord, options?: FrontmatterOptions): string => {
+      return matter.stringify(file, data, options as any);
+    };
+
     return {
       readMdxAndFrontmatter,
       updateMdxContent,
       parseMdxFile,
+      testForFrontmatter,
       compileMdxToHtml,
       compileMdx,
       compileForLlmUi,
       validateMdxConfig,
       extractParameters,
+      stringify,
     };
   }),
 }) {}

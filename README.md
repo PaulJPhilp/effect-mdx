@@ -24,9 +24,11 @@ that render MDX on the client.
 
 - ✅ **Purely Functional**: Built entirely with Effect-TS for robust error handling and composition.
 - 🧱 **Service-Based Architecture**: Uses Effect's `Service` pattern for easy testing and dependency management.
-- 📝 **Frontmatter-Aware**: First-class support for parsing and validating YAML frontmatter.
+- 📝 **Gray-matter Compatible**: Complete API compatibility with the popular gray-matter library for frontmatter parsing.
+- 🔄 **Round-trip Operations**: Parse-modify-stringify workflows with full frontmatter preservation.
 - ⚙️ **Extensible Compilation**: Leverages the `unified` ecosystem (`remark`, `rehype`) for flexible MDX processing.
 - 🚨 **Typed Errors**: Custom, typed errors (`InvalidMdxFormatError`) for predictable failure modes.
+- 🛠️ **Custom Engines**: Support for TOML, CoffeeScript, and other frontmatter formats via extensible engines.
 
 ## Installation
 
@@ -128,14 +130,82 @@ The `MdxService` provides the following methods:
 
 | Method                        | Description                                                         | Returns                                                    |
 | ----------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `readMdxAndFrontmatter(path)` | Read file, parse YAML frontmatter and body.                         | `Effect<ReadMdxAndFrontmatter, PlatformError | InvalidMdxFormatError>` |
+| `readMdxAndFrontmatter(path, options?)` | Read file, parse frontmatter and body with options.         | `Effect<ReadMdxAndFrontmatter, PlatformError | InvalidMdxFormatError>` |
 | `updateMdxContent(content, fm)`| Reconstruct content with updated frontmatter.                       | `string`                                                   |
-| `parseMdxFile(content)`       | Parse MDX string into attributes and body.                          | `Effect<ParsedMdxAttributes, InvalidMdxFormatError>`       |
+| `parseMdxFile(content, options?)` | Parse MDX string into attributes and body with options.     | `Effect<ParsedMdxAttributes, InvalidMdxFormatError>`       |
+| `testForFrontmatter(content)` | Check if content has frontmatter.                                   | `boolean`                                                  |
 | `compileMdxToHtml(content)`   | Compile body to HTML using remark/rehype.                           | `Effect<string, InvalidMdxFormatError>`                    |
 | `compileForLlmUi(content)`    | Prepare data for LLM UI (raw markdown + sanitized frontmatter).     | `Effect<CompileForLlmUiResult, InvalidMdxFormatError>`     |
 | `compileMdx(content, options)`| Compile true MDX with `@mdx-js/mdx` to JS/ESM.                      | `Effect<CompiledMdxResult, InvalidMdxFormatError>`         |
 | `validateMdxConfig(attrs)`    | Extract common config fields from attributes.                        | `Effect<MdxConfigValidation, never>`                       |
+| `stringify(file, data, options?)` | Stringify data to frontmatter format and prepend to content. | `string`                                                    |
 | `extractParameters(metadata)` | Extract typed parameter definitions from metadata.                   | `Parameters`                                               |
+
+### Frontmatter Options
+
+The `readMdxAndFrontmatter` and `parseMdxFile` methods accept an optional `FrontmatterOptions` parameter to customize frontmatter parsing:
+
+```typescript
+interface FrontmatterOptions {
+  /** Language for frontmatter parsing. Defaults to 'yaml'. Supports 'yaml', 'json', 'toml', etc. */
+  language?: string;
+  /** Custom delimiters. Can be a string (same for open/close) or [open, close] array. Defaults to '---'. */
+  delimiters?: string | readonly [string, string];
+  /** Extract excerpt from content. Can be true, false, or a custom function. */
+  excerpt?: boolean | ((file: any, options: any) => void);
+  /** Custom separator for excerpt extraction. */
+  excerptSeparator?: string;
+  /** Define custom engines for parsing/stringifying front-matter. */
+  engines?: Record<string, unknown>;
+}
+```
+
+**Examples:**
+
+```typescript
+// Parse JSON frontmatter
+const result = await Effect.runPromise(
+  mdx.parseMdxFile(content, { language: "json" })
+);
+
+// Use custom delimiters
+const result = await Effect.runPromise(
+  mdx.parseMdxFile(content, { delimiters: "~~~" })
+);
+
+// Extract excerpt
+const result = await Effect.runPromise(
+  mdx.parseMdxFile(content, {
+    excerpt: true,
+    excerptSeparator: "<!-- end -->"
+  })
+);
+
+// Test for frontmatter presence
+const hasFrontmatter = mdx.testForFrontmatter(content);
+
+// Use custom engines for other formats
+const customEngine = {
+  parse: (str: string) => {
+    // Parse key=value format
+    const result: Record<string, string> = {};
+    str.split('\n').forEach(line => {
+      const [key, value] = line.split('=');
+      if (key && value) result[key.trim()] = value.trim();
+    });
+    return result;
+  },
+  stringify: (data: Record<string, unknown>) =>
+    Object.entries(data).map(([k, v]) => `${k}=${v}`).join('\n')
+};
+
+const result = await Effect.runPromise(
+  mdx.parseMdxFile(content, {
+    language: "custom",
+    engines: { custom: customEngine }
+  })
+);
+```
 
 ### Key Types
 
