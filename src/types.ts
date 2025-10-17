@@ -62,6 +62,18 @@ export type ReadMdxAndFrontmatter = {
 export type ParsedMdxAttributes = {
   attributes: UnknownRecord;
   body: string;
+  /** When the front-matter is "empty" (either all whitespace, nothing at all, or just comments and no data), the original string is set on this property. */
+  empty?: string;
+  /** True if front-matter is empty. */
+  isEmpty?: boolean;
+  /** The detected language. */
+  language: string;
+  /** The raw frontmatter string. */
+  matter: string;
+  /** The original input string. */
+  orig: string;
+  /** Stringify the file by converting data to a string in the given language, wrapping it in delimiters and prepending it to content. */
+  stringify: (data?: UnknownRecord, options?: FrontmatterOptions) => string;
 };
 
 /** Supported parameter primitive kinds. */
@@ -116,6 +128,46 @@ export type CompileForLlmUiResult = {
   frontmatter: Metadata;
   metadata: { llmUiMode: true };
 };
+
+/**
+ * Options for frontmatter parsing with gray-matter.
+ */
+export interface FrontmatterOptions {
+  /** Language for frontmatter parsing. Defaults to 'yaml'. Supports 'yaml', 'json', 'toml', etc. */
+  readonly language?: string;
+  /** Custom delimiters. Can be a string (same for open/close) or [open, close] array. Defaults to '---'. */
+  readonly delimiters?: string | readonly [string, string];
+  /** Extract excerpt from content. Can be true, false, or a custom function. */
+  readonly excerpt?: boolean | ((input: string, options: FrontmatterOptions) => string);
+  /** Custom separator for excerpt extraction. */
+  readonly excerptSeparator?: string;
+  /** Define custom engines for parsing/stringifying front-matter. */
+  readonly engines?: Record<string, unknown>;
+}
+
+/**
+ * Extended result of parsing frontmatter with additional gray-matter properties.
+ */
+export interface ParsedFrontmatterResult {
+  /** The parsed frontmatter data. */
+  readonly data: UnknownRecord;
+  /** The content without frontmatter. */
+  readonly content: string;
+  /** The excerpt if extracted. */
+  readonly excerpt?: string;
+  /** When the front-matter is "empty" (either all whitespace, nothing at all, or just comments and no data), the original string is set on this property. */
+  readonly empty?: string;
+  /** True if front-matter is empty. */
+  readonly isEmpty?: boolean;
+  /** The detected language. */
+  readonly language: string;
+  /** The raw frontmatter string. */
+  readonly matter: string;
+  /** The original input string. */
+  readonly orig: string;
+  /** Stringify the file by converting data to a string in the given language, wrapping it in delimiters and prepending it to content. */
+  readonly stringify: (data?: UnknownRecord, options?: FrontmatterOptions) => string;
+}
 
 /** Extracted fields from frontmatter relevant to configuration. */
 export type MdxConfigValidation = {
